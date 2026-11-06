@@ -53,9 +53,18 @@ function makeCategoryMenu(categories) {
   return new ActionRowBuilder().addComponents(menu);
 }
 
+// A link entry in links.json is either a URL string or { "url": ..., "note": ... }.
+const linkUrl = (entry) => (typeof entry === "string" ? entry : entry && entry.url) || "";
+const linkNote = (entry) => (entry && typeof entry === "object" && entry.note ? String(entry.note) : "");
+
 // Build the link list as embeds, grouped into messages that fit Discord's limits.
 function buildLinkMessages(category, links) {
-  const lines = links.map((url, i) => `${i + 1}. <${url}>`);
+  const lines = links
+    .filter((entry) => linkUrl(entry))
+    .map((entry, i) => {
+      const note = linkNote(entry);
+      return `${i + 1}. <${linkUrl(entry)}>${note ? ` (${note})` : ""}`;
+    });
   const descriptions = [];
   let current = "";
   for (const line of lines) {
@@ -172,7 +181,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         categories[category] = [];
       }
 
-      if (categories[category].includes(link)) {
+      if (categories[category].some((entry) => linkUrl(entry) === link)) {
         await interaction.reply({
           content: `That link is already in **${category}**.`,
           ephemeral: true

@@ -4,7 +4,8 @@
     "https://itcode.vip/study.html",
     "https://dffdwwph7d3fk.cloudfront.net/",
     "https://spych.org",
-    "https://vps-048449e5.vps.ovh.us/"
+    "https://vps-048449e5.vps.ovh.us/",
+    "https://unpkg.com/browsezaka"
   ],
   "linewize": [
     "https://unpkg.com/browsezaka@1.0.1/index.xml",
@@ -26,5 +27,11 @@
     "https://totallyeducationrightbro.bagatz.com",
     "https://elkamisd.online",
     "https://account.elkamisd.online"
+  ],
+  "securly": [
+    {
+      "url": "https://itcode.vip",
+      "note": "username can be anything, password is zakazakazakazakkzakaa"
+    }
   ]
 }
