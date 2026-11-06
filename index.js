@@ -14,7 +14,11 @@ const {
 } = require("discord.js");
 
 const linksPath = path.join(__dirname, "links.json");
-const MAX_LINKS_PER_CATEGORY = 5;
+// Discord limits: 4096 chars per embed description, 10 embeds and 6000 embed
+// chars per message. Links are listed in descriptions and split to fit.
+const EMBED_DESC_MAX = 4000;
+const MESSAGE_EMBED_CHARS_MAX = 5800;
+const MESSAGE_EMBEDS_MAX = 10;
 const MAX_CATEGORIES = 25; // Discord select menus allow at most 25 options.
 
 const client = new Client({
@@ -49,6 +53,39 @@ function makeCategoryMenu(categories) {
   return new ActionRowBuilder().addComponents(menu);
 }
 
+// Build the link list as embeds, grouped into messages that fit Discord's limits.
+function buildLinkMessages(category, links) {
+  const lines = links.map((url, i) => `${i + 1}. <${url}>`);
+  const descriptions = [];
+  let current = "";
+  for (const line of lines) {
+    const piece = line.slice(0, EMBED_DESC_MAX);
+    if (current && current.length + 1 + piece.length > EMBED_DESC_MAX) {
+      descriptions.push(current);
+      current = "";
+    }
+    current = current ? `${current}\n${piece}` : piece;
+  }
+  if (current) descriptions.push(current);
+
+  const messages = [];
+  let embeds = [];
+  let chars = 0;
+  descriptions.forEach((desc, i) => {
+    const title = i === 0 ? category.slice(0, 256) : `${category.slice(0, 240)} (cont.)`;
+    const size = title.length + desc.length;
+    if (embeds.length && (embeds.length >= MESSAGE_EMBEDS_MAX || chars + size > MESSAGE_EMBED_CHARS_MAX)) {
+      messages.push(embeds);
+      embeds = [];
+      chars = 0;
+    }
+    embeds.push(new EmbedBuilder().setTitle(title).setDescription(desc));
+    chars += size;
+  });
+  if (embeds.length) messages.push(embeds);
+  return messages;
+}
+
 function isHttpUrl(value) {
   try {
     const url = new URL(value);
@@ -77,10 +114,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
 
+      // The panel itself is public so anyone can use it; the links each
+      // person picks are sent back to them privately (see the select handler).
       await interaction.reply({
-        content: "Choose a category. Only you can see this panel and its links.",
-        components: [makeCategoryMenu(categories)],
-        ephemeral: true
+        content: "Choose a category. The links are sent only to you.",
+        components: [makeCategoryMenu(categories)]
       });
       return;
     }
@@ -134,9 +172,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
         categories[category] = [];
       }
 
-      if (categories[category].length >= MAX_LINKS_PER_CATEGORY) {
+      if (categories[category].includes(link)) {
         await interaction.reply({
-          content: `**${category}** already has five links. Remove one before adding another.`,
+          content: `That link is already in **${category}**.`,
           ephemeral: true
         });
         return;
@@ -146,7 +184,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       saveCategories(categories);
 
       await interaction.reply({
-        content: `Added the link to **${category}** (${categories[category].length}/${MAX_LINKS_PER_CATEGORY}).`,
+        content: `Added the link to **${category}** (${categories[category].length} link${categories[category].length === 1 ? "" : "s"}).`,
         ephemeral: true
       });
       return;
@@ -164,32 +202,26 @@ client.on(Events.InteractionCreate, async (interaction) => {
   const category = interaction.values[0];
   const links = categories[category];
 
+  // Re-render the shared public panel with a fresh menu so the dropdown resets
+  // (otherwise it stays on the last pick and the same category can't be
+  // re-selected), then send the links privately as follow-ups.
+  await interaction.update({ components: [makeCategoryMenu(categories)] });
+
   if (!Array.isArray(links) || links.length === 0) {
-    await interaction.update({
+    await interaction.followUp({
       content: `No links are configured for **${category}**.`,
-      embeds: [],
-      components: [makeCategoryMenu(categories)]
+      ephemeral: true
     });
     return;
   }
 
-  const embed = new EmbedBuilder()
-    .setTitle(category)
-    .setDescription("Here are the links for this filter:");
-
-  links.forEach((url, index) => {
-    embed.addFields({
-      name: `Link ${index + 1}`,
-      value: `<${url}>`
+  for (const embeds of buildLinkMessages(category, links)) {
+    await interaction.followUp({
+      embeds,
+      ephemeral: true,
+      allowedMentions: { parse: [] }
     });
-  });
-
-  await interaction.update({
-    content: "",
-    embeds: [embed],
-    components: [makeCategoryMenu(categories)],
-    allowedMentions: { parse: [] }
-  });
+  }
 });
 
 client.login(process.env.DISCORD_TOKEN);
