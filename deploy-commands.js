@@ -29,7 +29,7 @@ const panelCommand = new SlashCommandBuilder()
       .addStringOption((option) =>
         option
           .setName("link")
-          .setDescription("The URL to add.")
+          .setDescription("The URL, optionally with a comment, e.g. https://itcode.vip main site.")
           .setRequired(true)
       )
       .addStringOption((option) =>

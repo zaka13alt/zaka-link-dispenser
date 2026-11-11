@@ -104,6 +104,26 @@ function isHttpUrl(value) {
   }
 }
 
+// Accept "https://itcode.vip" with optional comment text around it: pull out
+// the first http(s) URL, and whatever else was typed becomes the note. Returns
+// null when there's no URL in the input.
+const stripWrap = (s) =>
+  s.replace(/^[([{<"']+/, "").replace(/[)\]}>"'.,]+$/, "");
+
+function parseLinkInput(raw) {
+  const tokens = String(raw).split(/\s+/).filter(Boolean);
+  const i = tokens.findIndex((t) => isHttpUrl(stripWrap(t)));
+  if (i === -1) return null;
+  const url = stripWrap(tokens[i]);
+  const note = tokens
+    .filter((_, j) => j !== i)
+    .join(" ")
+    .replace(/^[([{<]\s*/, "")
+    .replace(/\s*[)\]}>]$/, "")
+    .trim();
+  return { url, note };
+}
+
 client.once(Events.ClientReady, (readyClient) => {
   console.log(`Logged in as ${readyClient.user.tag}`);
 });
@@ -141,18 +161,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
 
-      const link = interaction.options.getString("link", true).trim();
+      const linkInput = interaction.options.getString("link", true).trim();
       const requestedCategory = interaction.options
         .getString("category", true)
         .trim();
 
-      if (!isHttpUrl(link)) {
+      const parsed = parseLinkInput(linkInput);
+      if (!parsed) {
         await interaction.reply({
-          content: "Please provide a valid `http://` or `https://` link.",
+          content: "Please include a valid `http://` or `https://` link. You can add a comment around it, e.g. `https://itcode.vip main site`.",
           ephemeral: true
         });
         return;
       }
+      const { url, note } = parsed;
 
       if (!requestedCategory || requestedCategory.length > 100) {
         await interaction.reply({
@@ -181,7 +203,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         categories[category] = [];
       }
 
-      if (categories[category].some((entry) => linkUrl(entry) === link)) {
+      if (categories[category].some((entry) => linkUrl(entry) === url)) {
         await interaction.reply({
           content: `That link is already in **${category}**.`,
           ephemeral: true
@@ -189,7 +211,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
 
-      categories[category].push(link);
+      categories[category].push(note ? { url, note } : url);
       saveCategories(categories);
 
       await interaction.reply({
@@ -208,10 +230,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return;
       }
 
-      const link = interaction.options.getString("link", true).trim();
+      const removeInput = interaction.options.getString("link", true).trim();
       const requestedCategory = interaction.options
         .getString("category", true)
         .trim();
+
+      // Match by URL, so pasting the link with or without its comment works.
+      const parsedRemove = parseLinkInput(removeInput);
+      const link = parsedRemove ? parsedRemove.url : removeInput;
 
       const categories = loadCategories();
       const category = Object.keys(categories).find(
