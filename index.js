@@ -198,6 +198,77 @@ client.on(Events.InteractionCreate, async (interaction) => {
       });
       return;
     }
+
+    if (subcommand === "remove") {
+      if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+        await interaction.reply({
+          content: "You need the Manage Server permission to remove links.",
+          ephemeral: true
+        });
+        return;
+      }
+
+      const link = interaction.options.getString("link", true).trim();
+      const requestedCategory = interaction.options
+        .getString("category", true)
+        .trim();
+
+      const categories = loadCategories();
+      const category = Object.keys(categories).find(
+        (name) => name.toLowerCase() === requestedCategory.toLowerCase()
+      );
+
+      if (!category || !Array.isArray(categories[category])) {
+        await interaction.reply({
+          content: `There's no category named **${requestedCategory}**.`,
+          ephemeral: true
+        });
+        return;
+      }
+
+      const before = categories[category].length;
+      categories[category] = categories[category].filter(
+        (entry) => linkUrl(entry) !== link
+      );
+
+      if (categories[category].length === before) {
+        await interaction.reply({
+          content: `That link isn't in **${category}**.`,
+          ephemeral: true
+        });
+        return;
+      }
+
+      // Drop the category entirely once its last link is removed, so the panel
+      // dropdown doesn't keep an empty category around.
+      const emptied = categories[category].length === 0;
+      if (emptied) delete categories[category];
+      saveCategories(categories);
+
+      await interaction.reply({
+        content: emptied
+          ? `Removed the link and the now-empty **${category}** category.`
+          : `Removed the link from **${category}** (${categories[category].length} link${categories[category].length === 1 ? "" : "s"} left).`,
+        ephemeral: true
+      });
+      return;
+    }
+  }
+
+  if (interaction.isChatInputCommand() && interaction.commandName === "help") {
+    const help = new EmbedBuilder()
+      .setTitle("Link Dispenser — commands")
+      .setDescription(
+        [
+          "**/panel open** — open the panel; the links you pick are sent only to you.",
+          "**/panel add** `link` `category` — add a link to a category. *(Manage Server)*",
+          "**/panel remove** `link` `category` — remove a link from a category. *(Manage Server)*",
+          "**/help** — show this message."
+        ].join("\n")
+      );
+
+    await interaction.reply({ embeds: [help], ephemeral: true });
+    return;
   }
 
   if (
