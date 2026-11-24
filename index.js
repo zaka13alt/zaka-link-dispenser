@@ -5,6 +5,8 @@ const path = require("node:path");
 
 const {
   ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   Client,
   EmbedBuilder,
   Events,
@@ -56,6 +58,26 @@ function makeCategoryMenu(categories) {
 // A link entry in links.json is either a URL string or { "url": ..., "note": ... }.
 const linkUrl = (entry) => (typeof entry === "string" ? entry : entry && entry.url) || "";
 const linkNote = (entry) => (entry && typeof entry === "object" && entry.note ? String(entry.note) : "");
+
+function renderOne(categories, catIdx, index) {
+  const category = Object.keys(categories)[catIdx] || "";
+  const all = (categories[category] || []).filter((entry) => linkUrl(entry));
+  const len = all.length;
+  const i = ((index % len) + len) % len;
+  const entry = all[i];
+  const note = linkNote(entry);
+  const embed = new EmbedBuilder()
+    .setTitle(category.slice(0, 256))
+    .setDescription(`<${linkUrl(entry)}>${note ? `\n${note}` : ""}`)
+    .setFooter({ text: `Link ${i + 1} of ${len}` });
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`dispense:${catIdx}:${(i + 1) % len}`)
+      .setLabel(len > 1 ? "Another link" : "Reload")
+      .setStyle(ButtonStyle.Secondary)
+  );
+  return { embeds: [embed], components: [row] };
+}
 
 // Build the link list as embeds, grouped into messages that fit Discord's limits.
 function buildLinkMessages(category, links) {
@@ -297,6 +319,21 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  if (interaction.isButton() && interaction.customId.startsWith("dispense:")) {
+    const parts = interaction.customId.split(":");
+    const catIdx = Number(parts[1]);
+    const index = Number(parts[2]);
+    const categories = loadCategories();
+    const category = Object.keys(categories)[catIdx];
+    const all = category ? (categories[category] || []).filter((entry) => linkUrl(entry)) : [];
+    if (!all.length) {
+      await interaction.update({ content: "That category is no longer available.", embeds: [], components: [] });
+      return;
+    }
+    await interaction.update(renderOne(categories, catIdx, index));
+    return;
+  }
+
   if (
     !interaction.isStringSelectMenu() ||
     interaction.customId !== "panel_category"
@@ -321,13 +358,21 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  for (const embeds of buildLinkMessages(category, links)) {
+  const catIdx = Object.keys(categories).indexOf(category);
+  const all = links.filter((entry) => linkUrl(entry));
+  if (!all.length) {
     await interaction.followUp({
-      embeds,
-      ephemeral: true,
-      allowedMentions: { parse: [] }
+      content: `No links are configured for **${category}**.`,
+      ephemeral: true
     });
+    return;
   }
+  const start = Math.floor(Math.random() * all.length);
+  await interaction.followUp({
+    ...renderOne(categories, catIdx, start),
+    ephemeral: true,
+    allowedMentions: { parse: [] }
+  });
 });
 
 client.login(process.env.DISCORD_TOKEN);
