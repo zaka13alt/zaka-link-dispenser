@@ -346,6 +346,54 @@ client.on(Events.InteractionCreate, async (interaction) => {
       });
       return;
     }
+
+    if (interaction.options.getSubcommand() === "list") {
+      const categories = loadCategories();
+      const names = Object.keys(categories);
+      if (names.length === 0) {
+        await interaction.reply({ content: "There are no categories yet.", ephemeral: true });
+        return;
+      }
+      const lines = names.map((name) => {
+        const count = Array.isArray(categories[name]) ? categories[name].filter((entry) => linkUrl(entry)).length : 0;
+        return `\u2022 **${name}** \u2014 ${count} link${count === 1 ? "" : "s"}`;
+      });
+      const embed = new EmbedBuilder()
+        .setTitle(`Categories (${names.length})`)
+        .setDescription(lines.join("\n").slice(0, 4000));
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+      return;
+    }
+
+    if (interaction.options.getSubcommand() === "remove") {
+      if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+        await interaction.reply({
+          content: "You need the Manage Server permission to remove categories.",
+          ephemeral: true
+        });
+        return;
+      }
+      const requestedCategory = interaction.options.getString("name", true).trim();
+      const categories = loadCategories();
+      const existingCategory = Object.keys(categories).find(
+        (name) => name.toLowerCase() === requestedCategory.toLowerCase()
+      );
+      if (!existingCategory) {
+        await interaction.reply({
+          content: `There's no category named **${requestedCategory}**.`,
+          ephemeral: true
+        });
+        return;
+      }
+      const count = Array.isArray(categories[existingCategory]) ? categories[existingCategory].length : 0;
+      delete categories[existingCategory];
+      saveCategories(categories);
+      await interaction.reply({
+        content: `Removed the **${existingCategory}** category and its ${count} link${count === 1 ? "" : "s"}.`,
+        ephemeral: true
+      });
+      return;
+    }
   }
 
   if (interaction.isChatInputCommand() && interaction.commandName === "help") {
@@ -357,6 +405,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
           "**/panel add** `link` `category` — add a link to a category. *(Manage Server)*",
           "**/panel remove** `link` `category` — remove a link from a category. *(Manage Server)*",
           "**/category add** `name` — create a new empty category. *(Manage Server)*",
+          "**/category list** — list all categories and their link counts.",
+          "**/category remove** `name` — delete a category and its links. *(Manage Server)*",
           "**/help** — show this message."
         ].join("\n")
       );

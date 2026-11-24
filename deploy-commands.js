@@ -74,6 +74,22 @@ const categoryCommand = new SlashCommandBuilder()
           .setDescription("The category name, for example Batch Lightspeed.")
           .setRequired(true)
       )
+  )
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName("list")
+      .setDescription("List all categories and how many links each has.")
+  )
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName("remove")
+      .setDescription("Delete a category and all of its links.")
+      .addStringOption((option) =>
+        option
+          .setName("name")
+          .setDescription("The category to delete.")
+          .setRequired(true)
+      )
   );
 
 const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
