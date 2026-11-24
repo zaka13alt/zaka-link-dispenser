@@ -61,11 +61,26 @@ const helpCommand = new SlashCommandBuilder()
   .setName("help")
   .setDescription("Show what the link dispenser can do.");
 
+const categoryCommand = new SlashCommandBuilder()
+  .setName("category")
+  .setDescription("Manage link categories.")
+  .addSubcommand((subcommand) =>
+    subcommand
+      .setName("add")
+      .setDescription("Create a new empty category.")
+      .addStringOption((option) =>
+        option
+          .setName("name")
+          .setDescription("The category name, for example Batch Lightspeed.")
+          .setRequired(true)
+      )
+  );
+
 const rest = new REST({ version: "10" }).setToken(DISCORD_TOKEN);
 
 rest.put(
   Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-  { body: [panelCommand.toJSON(), helpCommand.toJSON()] }
+  { body: [panelCommand.toJSON(), helpCommand.toJSON(), categoryCommand.toJSON()] }
 )
-  .then(() => console.log("Registered /panel open, add, remove and /help."))
+  .then(() => console.log("Registered /panel, /help and /category."))
   .catch(console.error);

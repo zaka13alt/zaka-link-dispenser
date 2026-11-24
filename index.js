@@ -303,6 +303,51 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   }
 
+  if (interaction.isChatInputCommand() && interaction.commandName === "category") {
+    if (interaction.options.getSubcommand() === "add") {
+      if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+        await interaction.reply({
+          content: "You need the Manage Server permission to add categories.",
+          ephemeral: true
+        });
+        return;
+      }
+      const requestedCategory = interaction.options.getString("name", true).trim();
+      if (!requestedCategory || requestedCategory.length > 100) {
+        await interaction.reply({
+          content: "Category names must be between 1 and 100 characters.",
+          ephemeral: true
+        });
+        return;
+      }
+      const categories = loadCategories();
+      const existingCategory = Object.keys(categories).find(
+        (name) => name.toLowerCase() === requestedCategory.toLowerCase()
+      );
+      if (existingCategory) {
+        await interaction.reply({
+          content: `**${existingCategory}** already exists.`,
+          ephemeral: true
+        });
+        return;
+      }
+      if (Object.keys(categories).length >= MAX_CATEGORIES) {
+        await interaction.reply({
+          content: "The panel has reached Discord's 25-category dropdown limit.",
+          ephemeral: true
+        });
+        return;
+      }
+      categories[requestedCategory] = [];
+      saveCategories(categories);
+      await interaction.reply({
+        content: `Created the empty category **${requestedCategory}**. Add links with \`/panel add\`.`,
+        ephemeral: true
+      });
+      return;
+    }
+  }
+
   if (interaction.isChatInputCommand() && interaction.commandName === "help") {
     const help = new EmbedBuilder()
       .setTitle("Link Dispenser — commands")
@@ -311,6 +356,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           "**/panel open** — open the panel; the links you pick are sent only to you.",
           "**/panel add** `link` `category` — add a link to a category. *(Manage Server)*",
           "**/panel remove** `link` `category` — remove a link from a category. *(Manage Server)*",
+          "**/category add** `name` — create a new empty category. *(Manage Server)*",
           "**/help** — show this message."
         ].join("\n")
       );
